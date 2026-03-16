@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mission Control v2 — OpenClaw</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            claw: { 
+              50: '#fef3e2', 
+              100: '#fde4b9', 
+              500: '#f59e0b', 
+              600: '#d97706', 
+              700: '#b45309', 
+              900: '#78350f' 
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body { font-family: 'Inter', system-ui, -apple-system, sans-serif; }
+    .card { @apply bg-gray-800 rounded-lg border border-gray-700 p-4; }
+    .pulse-green { animation: pulse-g 2s infinite; }
+    @keyframes pulse-g { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+    .status-badge { @apply px-2 py-0.5 rounded-full text-xs font-medium; }
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: #1f2937; }
+    ::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 3px; }
+  </style>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen">
+
+  <!-- Header -->
+  <header class="bg-gray-800 border-b border-gray-700 px-6 py-3 flex items-center justify-between sticky top-0 z-50">
+    <div class="flex items-center gap-3">
+      <span class="text-2xl">🦞</span>
+      <h1 class="text-xl font-bold text-claw-500">Mission Control</h1>
+      <span class="text-gray-500 text-sm">v2</span>
+    </div>
+    <div class="flex items-center gap-4">
+      <span id="last-update" class="text-gray-500 text-sm"></span>
+      <button onclick="refreshAll()" class="bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded text-sm transition-colors">
+        Refresh
+      </button>
+      <span id="gateway-indicator" class="w-3 h-3 rounded-full bg-gray-600"></span>
+    </div>
+  </header>
+
+  <!-- Main Grid -->
+  <main class="p-6 grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
+
+    <!-- 1. Gateway Card -->
+    <div class="card col-span-1">
+      <h2 class="text-claw-500 font-semibold mb-3 flex items-center gap-2">
+        <span>⚡</span> Gateway
+      </h2>
+      <div id="gateway-panel" class="space-y-2 text-sm">
+        <div class="text-gray-500">Loading...</div>
+      </div>
+    </div>
+
+    <!-- 2. Ollama Card -->
+    <div class="card col-span-1">
+      <h2 class="text-claw-500 font-semibold mb-3 flex items-center gap-2">
+        <span>🧠</span> Ollama
+      </h2>
+      <div id="ollama-panel" class="space-y-2 text-sm">
+        <div class="text-gray-500">Loading...</div>
+      </div>
+    </div>
+
+    <!-- 3. Cron Card -->
+    <div class="card col-span-1">
+      <h2 class="text-claw-500 font-semibold mb-3 flex items-center gap-2">
+        <span>⏰</span> Cron Jobs
+      </h2>
+      <div id="cron-panel" class="space-y-2 text-sm">
+        <div class="text-gray-500">Loading...</div>
+      </div>
+    </div>
+
+    <!-- 4. Agent Registry (full width) -->
+    <div class="card col-span-1 lg:col-span-2 xl:col-span-3">
+      <h2 class="text-claw-500 font-semibold mb-3 flex items-center gap-2">
+        <span>🤖</span> Agent Registry
+        <span id="agent-count" class="text-gray-500 text-xs font-normal"></span>
+      </h2>
+      <div id="agents-panel" class="overflow-x-auto">
+        <div class="text-gray-500 text-sm">Loading...</div>
+      </div>
+    </div>
+
+    <!-- 5. Task Dashboard (2/3 width) -->
+    <div class="card col-span-1 lg:col-span-2">
+      <h2 class="text-claw-500 font-semibold mb-3 flex items-center gap-2">
+        <span>📋</span> Task Dashboard
+      </h2>
+      <div id="tasks-panel" class="space-y-3 text-sm">
+        <div class="text-gray-500">Loading...</div>
+      </div>
+    </div>
+
+    <!-- 6. Health Check (1/3 width) -->
+    <div class="card col-span-1">
+      <h2 class="text-claw-500 font-semibold mb-3 flex items-center gap-2">
+        <span>🏥</span> Health Check
+        <button onclick="runHealthCheck()" class="ml-auto text-xs bg-gray-700 hover:bg-gray-600 px-2 py-1 rounded transition-colors">
+          Run Live
+        </button>
+      </h2>
+      <div id="health-panel" class="space-y-2 text-sm">
+        <div class="text-gray-500">Loading...</div>
+      </div>
+    </div>
+
+    <!-- 7. Decision Feed (2/3 width) -->
+    <div class="card col-span-1 lg:col-span-2">
+      <h2 class="text-claw-500 font-semibold mb-3 flex items-center gap-2">
+        <span>📜</span> Decision Feed
+      </h2>
+      <div id="decisions-panel" class="space-y-2 text-sm max-h-80 overflow-y-auto">
+        <div class="text-gray-500">Loading...</div>
+      </div>
+    </div>
+
+    <!-- 8. Parking Lot (1/3 width) -->
+    <div class="card col-span-1">
+      <h2 class="text-claw-500 font-semibold mb-3 flex items-center gap-2">
+        <span>📌</span> Parking Lot
+      </h2>
+      <div id="pinned-panel" class="space-y-2 text-sm">
+        <div class="text-gray-500">Loading...</div>
+      </div>
+    </div>
+
+  </main>
+
+  <footer class="text-center text-gray-600 text-xs py-4">
+    Mission Control v2 — OpenClaw Factory Operations
+  </footer>
+
+<script>
+const API = '';
+let refreshTimer;
+
+// Agent color mapping
+const AGENT_COLORS = {
+  main: 'text-claw-500',
+  denny: 'text-blue-400',
+  nexus: 'text-purple-400',
+  qa: 'text-green-400',
+  leaddev: 'text-cyan-400',
+  weblead: 'text-teal-400',
+  frontend: 'text-pink-400',
+  backend: 'text-indigo-400',
+  realtime: 'text-orange-400'
+};
+
+// Status badge colors
+const STATUS_COLORS = {
+  draft: 'bg-gray-600',
+  queued: 'bg-blue-600',
+  active: 'bg-green-600',
+  review: 'bg-yellow-600',
+  done: 'bg-emerald-700',
+  blocked: 'bg-red-600',
+  escalated: 'bg-orange-600',
+  cancelled: 'bg-gray-700',
+  planning: 'bg-blue-600',
+  completed: 'bg-emerald-700'
+};
+
+// --- Fetch helpers ---
+async function fetchJSON(url) {
+  try {
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.warn(`API fetch failed for ${url}:`, error.message);
+    return { error: error.message, timestamp: new Date().toISOString() };
+  }
+}
+
+// --- Utility functions ---
+function escapeHtml(str) {
+  if (!str) return '';
+  return str.toString()
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#x27;');
+}
+
+function formatTimeAgo(isoString) {
+  if (!isoString) return '—';
+  try {
+    const date = new Date(isoString);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+    
+    if (diffMins < 1) return 'just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffMins < 1440) return `${Math.floor(diffMins / 60)}h ago`;
+    return `${Math.floor(diffMins / 1440)}d ago`;
+  } catch {
+    return isoString;
+  }
+}
+
+// --- Render functions ---
+function renderGateway(data) {
+  const el = document.getElementById('gateway-panel');
+  const indicator = document.getElementById('gateway-indicator');
+  
+  if (data.error) {
+    el.innerHTML = `<div class="text-red-400">Error: ${escapeHtml(data.error)}</div>`;
+    indicator.className = 'w-3 h-3 rounded-full bg-red-500';
+    return;
+  }
+
+  const running = data.pid !== null && data.pid !== undefined;
+  indicator.className = `w-3 h-3 rounded-full ${running ? 'bg-green-500 pulse-green' : 'bg-red-500'}`;
+
+  el.innerHTML = `
+    <div class="flex justify-between"><span class="text-gray-400">Status</span><span class="${running ? 'text-green-400' : 'text-red-400'}">${running ? 'Running' : 'Stopped'}</span></div>
+    <div class="flex justify-between"><span class="text-gray-400">Port</span><span>${data.port || '—'} (${escapeHtml(data.bind || '—')})</span></div>
+    <div class="flex justify-between"><span class="text-gray-400">PID</span><span>${data.pid || '—'}</span></div>
+    <div class="flex justify-between"><span class="text-gray-400">Uptime</span><span>${escapeHtml(data.uptime || '—')}</span></div>
+    <div class="flex justify-between"><span class="text-gray-400">Version</span><span>${escapeHtml(data.openclawVersion || '—')}</span></div>
+    <hr class="border-gray-700 my-2">
+    <div class="flex justify-between"><span class="text-gray-400">Load</span><span>${escapeHtml(data.loadAvg || '—')}</span></div>
+    <div class="flex justify-between"><span class="text-gray-400">Memory</span><span>${escapeHtml(data.memory || '—')}</span></div>
+    <div class="flex justify-between"><span class="text-gray-400">Disk</span><span>${escapeHtml(data.disk || '—')}</span></div>
+  `;
+}
+
+function renderOllama(data) {
+  const el = document.getElementById('ollama-panel');
+  
+  if (data.error) {
+    el.innerHTML = `<div class="text-red-400">Error: ${escapeHtml(data.error)}</div>`;
+    return;
+  }
+
+  const statusColor = data.status === 'active' ? 'text-green-400' : 
+                     data.status === 'inactive' ? 'text-red-400' : 'text-yellow-400';
+  
+  const modelsHtml = data.models && data.models.length > 0
+    ? data.models.map(m => `<div class="flex justify-between"><span class="text-gray-300">${escapeHtml(m.name)}</span><span class="text-gray-500">${escapeHtml(m.size)}</span></div>`).join('')
+    : '<div class="text-gray-500">No models loaded</div>';
+
+  el.innerHTML = `
+    <div class="flex justify-between"><span class="text-gray-400">Status</span><span class="${statusColor}">${escapeHtml(data.status || 'unknown')}</span></div>
+    <hr class="border-gray-700 my-2">
+    <div class="text-gray-400 mb-1">Models (${data.models ? data.models.length : 0}):</div>
+    ${modelsHtml}
+  `;
+}
+
+function renderCrons(data) {
+  const el = document.getElementById('cron-panel');
+  
+  if (data.error) {
+    el.innerHTML = `<div class="text-red-400">Error: ${escapeHtml(data.error)}</div>`;
+    return;
+  }
+  
+  if (!data.jobs || data.jobs.length === 0) {
+    el.innerHTML = '<div class="text-gray-500">No cron jobs scheduled</div>';
+    return;
+  }
+  
+  el.innerHTML = data.jobs.map(job => `
+    <div class="border-l-2 border-gray-700 pl-3 py-1">
+      <div class="text-gray-300 text-sm">${escapeHtml(job.description || 'Scheduled Job')}</div>
+      <div class="text-xs text-gray-500 font-mono">${escapeHtml(job.schedule || '—')}</div>
+    </div>
+  `).join('');
+}
+
+function renderAgents(data) {
+  const el = document.getElementById('agents-panel');
+  const countEl = document.getElementById('agent-count');
+  
+  if (data.error) {
+    el.innerHTML = `<div class="text-red-400">Error: ${escapeHtml(data.error)}</div>`;
+    countEl.textContent = '';
+    return;
+  }
+
+  if (!Array.isArray(data)) {
+    el.innerHTML = '<div class="text-red-400">Invalid agents data format</div>';
+    countEl.textContent = '';
+    return;
+  }
+
+  countEl.textContent = `(${data.length} agents)`;
+
+  if (data.length === 0) {
+    el.innerHTML = '<div class="text-gray-500">No agents found</div>';
+    return;
+  }
+
+  const rows = data.map(agent => {
+    const healthDot = (agent.wsExists && agent.soulExists) ? '🟢' : '🔴';
+    const lastActive = formatTimeAgo(agent.lastSession);
+    const spawnTargets = agent.canSpawn && agent.canSpawn.length > 0
+      ? agent.canSpawn.map(target => `<span class="bg-gray-700 px-1.5 py-0.5 rounded text-xs">${escapeHtml(target)}</span>`).join(' ')
+      : '<span class="text-gray-600 text-xs">leaf</span>';
+
+    return `
+      <tr class="border-t border-gray-700 hover:bg-gray-750">
+        <td class="py-2 px-3 text-center">${healthDot}</td>
+        <td class="py-2 px-3 font-medium">${escapeHtml(agent.name || agent.id)}</td>
+        <td class="py-2 px-3 text-gray-400">${escapeHtml(agent.id)}</td>
+        <td class="py-2 px-3"><span class="bg-gray-700 px-2 py-0.5 rounded text-xs">${escapeHtml(agent.model || '—')}</span></td>
+        <td class="py-2 px-3 text-gray-400">${agent.toolsAllowed || 0}</td>
+        <td class="py-2 px-3">${spawnTargets}</td>
+        <td class="py-2 px-3 text-gray-500 text-xs">${lastActive}</td>
+      </tr>
+    `;
+  }).join('');
+
+  el.innerHTML = `
+    <table class="w-full text-sm">
+      <thead>
+        <tr class="text-gray-500 text-left text-xs uppercase border-b border-gray-700">
+          <th class="py-2 px-3">Health</th>
+          <th class="py-2 px-3">Name</th>
+          <th class="py-2 px-3">ID</th>
+          <th class="py-2 px-3">Model</th>
+          <th class="py-2 px-3">Tools</th>
+          <th class="py-2 px-3">Spawn Targets</th>
+          <th class="py-2 px-3">Last Active</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+  `;
+}
+
+function renderTasks(data) {
+  const el = document.getElementById('tasks-panel');
+  
+  if (data.error) {
+    el.innerHTML = `<div class="text-red-400">Error: ${escapeHtml(data.error)}</div>`;
+    return;
+  }
+
+  // Plan/Task counts
+  const planTotal = data.plans ? data.plans.total || 0 : 0;
+  const taskTotal = data.tasks ? data.tasks.total || 0 : 0;
+
+  // Status badges
+  const statusBadges = data.tasks && data.tasks.byStatus ? 
+    data.tasks.byStatus.map(s => 
+      `<span class="${STATUS_COLORS[s.status] || 'bg-gray-600'} status-badge text-white">${escapeHtml(s.status)}: ${s.c}</span>`
+    ).join(' ') : '';
+
+  // Active tasks
+  const activeHtml = data.activeTasks && data.activeTasks.length > 0 ?
+    data.activeTasks.slice(0, 10).map(task => `
+      <div class="flex items-center gap-2 py-1">
+        <span class="${STATUS_COLORS[task.status] || 'bg-gray-600'} status-badge text-white">${escapeHtml(task.status)}</span>
+        <span class="text-gray-300 flex-1 truncate" title="${escapeHtml(task.title)}">${escapeHtml(task.title || task.id)}</span>
+        <span class="${AGENT_COLORS[task.owner] || 'text-gray-500'} text-xs">${escapeHtml(task.owner)}</span>
+        <span class="text-gray-600 text-xs">P${task.priority || '?'}</span>
+      </div>
+    `).join('') : '<div class="text-gray-500 py-2">No active tasks</div>';
+
+  // Recent activity
+  const logHtml = data.recentLog && data.recentLog.length > 0 ?
+    data.recentLog.slice(0, 5).map(entry => `
+      <div class="text-xs text-gray-500 py-0.5">
+        <span class="${AGENT_COLORS[entry.agent_id] || 'text-gray-400'}">${escapeHtml(entry.agent_id)}</span>
+        moved <span class="text-gray-300" title="${escapeHtml(entry.title)}">${escapeHtml((entry.title || '').slice(0, 30))}</span>
+        ${escapeHtml(entry.old_status)} → <span class="text-gray-200">${escapeHtml(entry.new_status)}</span>
+        ${entry.note ? `<div class="text-gray-600 mt-0.5">${escapeHtml(entry.note.slice(0, 100))}</div>` : ''}
+      </div>
+    `).join('') : '<div class="text-gray-500 text-xs">No recent activity</div>';
+
+  el.innerHTML = `
+    <div class="flex gap-4 mb-3">
+      <div class="bg-gray-700 rounded px-3 py-2 text-center flex-1">
+        <div class="text-2xl font-bold text-claw-500">${planTotal}</div>
+        <div class="text-xs text-gray-400">Plans</div>
+      </div>
+      <div class="bg-gray-700 rounded px-3 py-2 text-center flex-1">
+        <div class="text-2xl font-bold text-claw-500">${taskTotal}</div>
+        <div class="text-xs text-gray-400">Tasks</div>
+      </div>
+    </div>
+    <div class="mb-3 flex flex-wrap gap-1">
+      ${statusBadges || '<span class="text-gray-500 text-xs">No task status data</span>'}
+    </div>
+    <div class="border-t border-gray-700 pt-2">
+      <div class="text-gray-400 text-xs uppercase mb-2">Active Work</div>
+      <div class="space-y-1">${activeHtml}</div>
+    </div>
+    <div class="border-t border-gray-700 pt-2 mt-3">
+      <div class="text-gray-400 text-xs uppercase mb-2">Recent Activity</div>
+      <div class="space-y-1">${logHtml}</div>
+    </div>
+  `;
+}
+
+function renderHealth(data) {
+  const el = document.getElementById('health-panel');
+  
+  if (data.error) {
+    el.innerHTML = `<div class="text-red-400">Error: ${escapeHtml(data.error)}</div>`;
+    return;
+  }
+
+  if (data.live) {
+    // Live health check results
+    const totalChecks = (data.passed || 0) + (data.failed || 0) + (data.warnings || 0);
+    const overallColor = data.failed > 0 ? 'text-red-400' : 
+                        data.warnings > 0 ? 'text-yellow-400' : 'text-green-400';
+    
+    el.innerHTML = `
+      <div class="grid grid-cols-3 gap-2 mb-3">
+        <div class="text-center">
+          <div class="text-lg font-bold text-green-400">${data.passed || 0}</div>
+          <div class="text-xs text-gray-500">Pass</div>
+        </div>
+        <div class="text-center">
+          <div class="text-lg font-bold text-red-400">${data.failed || 0}</div>
+          <div class="text-xs text-gray-500">Fail</div>
+        </div>
+        <div class="text-center">
+          <div class="text-lg font-bold text-yellow-400">${data.warnings || 0}</div>
+          <div class="text-xs text-gray-500">Warn</div>
+        </div>
+      </div>
+      <div class="text-xs text-gray-500 text-center">
+        <span class="${overallColor}">Last run: just now</span>
+        ${totalChecks > 0 ? ` (${totalChecks} checks)` : ''}
+      </div>
+    `;
+  } else {
+    // Cached results
+    el.innerHTML = `
+      <div class="text-xs text-gray-400 max-h-32 overflow-y-auto">
+        <div class="mb-2 text-gray-500">Latest log (cached):</div>
+        <pre class="whitespace-pre-wrap">${escapeHtml(data.lastLog || 'No log data available')}</pre>
+      </div>
+    `;
+  }
+}
+
+function renderDecisions(data) {
+  const el = document.getElementById('decisions-panel');
+  
+  if (data.error) {
+    el.innerHTML = `<div class="text-red-400">Error: ${escapeHtml(data.error)}</div>`;
+    return;
+  }
+
+  if (!data.decisions || data.decisions.length === 0) {
+    el.innerHTML = '<div class="text-gray-500">No decisions logged yet</div>';
+    return;
+  }
+
+  // Show decisions in reverse chronological order (most recent first)
+  const decisionsHtml = data.decisions.map(decision => `
+    <div class="border-l-2 border-gray-700 pl-3 py-2 hover:border-gray-600">
+      <div class="flex items-center gap-2 mb-1">
+        <span class="${AGENT_COLORS[decision.agent] || 'text-gray-400'} text-xs font-medium uppercase">${escapeHtml(decision.agent)}</span>
+        <span class="text-gray-600 text-xs">${escapeHtml(decision.section)}</span>
+      </div>
+      <div class="text-gray-300 text-sm leading-relaxed">
+        ${escapeHtml(decision.text).slice(0, 300)}${decision.text.length > 300 ? '...' : ''}
+      </div>
+    </div>
+  `).join('');
+
+  el.innerHTML = decisionsHtml;
+}
+
+function renderPinned(data) {
+  const el = document.getElementById('pinned-panel');
+  
+  if (data.error) {
+    el.innerHTML = `<div class="text-red-400">Error: ${escapeHtml(data.error)}</div>`;
+    return;
+  }
+  
+  if (!data.items || data.items.length === 0) {
+    el.innerHTML = '<div class="text-gray-500">Nothing pinned</div>';
+    return;
+  }
+
+  el.innerHTML = data.items.map(item => `
+    <div class="border border-gray-700 rounded p-3 hover:border-gray-600 transition-colors">
+      <div class="font-medium text-sm mb-1" title="${escapeHtml(item.title)}">
+        ${escapeHtml(item.title || item.file)}
+      </div>
+      <div class="text-xs text-gray-500 flex justify-between">
+        <span>${escapeHtml(item.status || 'No status')}</span>
+        <span>${escapeHtml(item.pinned || '')}</span>
+      </div>
+      ${item.content ? `<div class="text-xs text-gray-400 mt-2 leading-relaxed">${escapeHtml(item.content.slice(0, 150))}${item.content.length > 150 ? '...' : ''}</div>` : ''}
+    </div>
+  `).join('');
+}
+
+// --- Health check trigger ---
+async function runHealthCheck() {
+  const el = document.getElementById('health-panel');
+  el.innerHTML = '<div class="text-yellow-400 text-center py-4">Running live healthcheck...</div>';
+  
+  try {
+    const data = await fetchJSON('/api/health?live=true');
+    renderHealth(data);
+  } catch (error) {
+    el.innerHTML = `<div class="text-red-400">Failed to run healthcheck: ${escapeHtml(error.message)}</div>`;
+  }
+}
+
+// --- Main refresh function ---
+async function refreshAll() {
+  const lastUpdateEl = document.getElementById('last-update');
+  lastUpdateEl.textContent = 'Updating...';
+
+  try {
+    // Fetch all 8 API endpoints in parallel
+    const [gateway, agents, ollama, tasks, decisions, pinned, health, crons] = await Promise.all([
+      fetchJSON('/api/gateway'),
+      fetchJSON('/api/agents'),
+      fetchJSON('/api/ollama'),
+      fetchJSON('/api/tasks'),
+      fetchJSON('/api/decisions'),
+      fetchJSON('/api/pinned'),
+      fetchJSON('/api/health'),
+      fetchJSON('/api/crons')
+    ]);
+
+    // Render all panels
+    renderGateway(gateway);
+    renderAgents(agents);
+    renderOllama(ollama);
+    renderTasks(tasks);
+    renderDecisions(decisions);
+    renderPinned(pinned);
+    renderHealth(health);
+    renderCrons(crons);
+
+    lastUpdateEl.textContent = `Updated ${new Date().toLocaleTimeString()}`;
+  } catch (error) {
+    console.error('Refresh failed:', error);
+    lastUpdateEl.textContent = `Update failed: ${error.message}`;
+  }
+}
+
+// --- Initialize ---
+// Initial load
+refreshAll();
+
+// Auto-refresh every 30 seconds
+refreshTimer = setInterval(refreshAll, 30000);
+
+// Cleanup on page unload
+window.addEventListener('beforeunload', () => {
+  if (refreshTimer) {
+    clearInterval(refreshTimer);
+  }
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mission Control v3 — OpenClaw</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    if (typeof tailwind !== 'undefined') tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            claw: { 
+              50: '#fef3e2', 
+              100: '#fde4b9', 
+              500: '#f59e0b', 
+              600: '#d97706', 
+              700: '#b45309', 
+              900: '#78350f' 
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <link rel="stylesheet" href="css/v3-styles.css">
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen flex flex-col">
+
+  <!-- Header -->
+  <header class="bg-gray-800 border-b border-gray-700 px-6 py-3 flex items-center justify-between sticky top-0 z-50 shrink-0">
+    <div class="flex items-center gap-3">
+      <span class="text-2xl">🦞</span>
+      <h1 class="text-xl font-bold text-claw-500">Mission Control</h1>
+      <span class="text-gray-500 text-sm">v3</span>
+    </div>
+    <div class="flex items-center gap-4">
+      <span id="last-update" class="text-gray-500 text-sm"></span>
+      <button onclick="TabSystem.refreshCurrentTab(true)" class="bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded text-sm transition-colors">
+        Refresh
+      </button>
+      <span id="gateway-indicator" class="w-3 h-3 rounded-full bg-gray-600"></span>
+    </div>
+  </header>
+
+  <!-- Tab Navigation -->
+  <nav class="bg-gray-800 border-b border-gray-700 px-6 shrink-0">
+    <div class="flex overflow-x-auto">
+      <button onclick="TabSystem.navigate('overview')" 
+              class="tab-button flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 border-transparent hover:border-claw-500 hover:text-claw-400 transition-colors whitespace-nowrap"
+              data-tab="overview">
+        <span>📊</span> Overview
+      </button>
+      <button onclick="TabSystem.navigate('agents')" 
+              class="tab-button flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 border-transparent hover:border-claw-500 hover:text-claw-400 transition-colors whitespace-nowrap"
+              data-tab="agents">
+        <span>🤖</span> Agents
+      </button>
+      <button onclick="TabSystem.navigate('hierarchy')" 
+              class="tab-button flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 border-transparent hover:border-claw-500 hover:text-claw-400 transition-colors whitespace-nowrap"
+              data-tab="hierarchy">
+        <span>🌳</span> Hierarchy
+      </button>
+      <button onclick="TabSystem.navigate('projects')" 
+              class="tab-button flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 border-transparent hover:border-claw-500 hover:text-claw-400 transition-colors whitespace-nowrap"
+              data-tab="projects">
+        <span>📋</span> Projects
+      </button>
+      <button onclick="TabSystem.navigate('archive')" 
+              class="tab-button flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 border-transparent hover:border-claw-500 hover:text-claw-400 transition-colors whitespace-nowrap"
+              data-tab="archive">
+        <span>📁</span> Archive
+      </button>
+      <button onclick="TabSystem.navigate('feed')" 
+              class="tab-button flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 border-transparent hover:border-claw-500 hover:text-claw-400 transition-colors whitespace-nowrap"
+              data-tab="feed">
+        <span>📡</span> Live Feed
+      </button>
+      <button onclick="TabSystem.navigate('performance')" 
+              class="tab-button flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 border-transparent hover:border-claw-500 hover:text-claw-400 transition-colors whitespace-nowrap"
+              data-tab="performance">
+        <span>📈</span> Performance
+      </button>
+      <button onclick="TabSystem.navigate('parking')" 
+              class="tab-button flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 border-transparent hover:border-claw-500 hover:text-claw-400 transition-colors whitespace-nowrap"
+              data-tab="parking">
+        <span>🅿️</span> Parking
+      </button>
+      <button onclick="TabSystem.navigate('whiteboard')" 
+              class="tab-button flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 border-transparent hover:border-claw-500 hover:text-claw-400 transition-colors whitespace-nowrap"
+              data-tab="whiteboard">
+        <span>🎨</span> Whiteboard
+      </button>
+      <button onclick="TabSystem.navigate('hivedeck-agents')" 
+              class="tab-button flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 border-transparent hover:border-claw-500 hover:text-claw-400 transition-colors whitespace-nowrap"
+              data-tab="hivedeck-agents">
+        <span>🏪</span> HiveDeck Agents
+      </button>
+      <button onclick="TabSystem.navigate('sites')" 
+              class="tab-button flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 border-transparent hover:border-claw-500 hover:text-claw-400 transition-colors whitespace-nowrap"
+              data-tab="sites">
+        <span>🌐</span> Sites
+      </button>
+      <button onclick="TabSystem.navigate('pipeline')" 
+              class="tab-button flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 border-transparent hover:border-claw-500 hover:text-claw-400 transition-colors whitespace-nowrap"
+              data-tab="pipeline">
+        <span>🧩</span> Pipeline
+      </button>
+    </div>
+  </nav>
+
+  <!-- Tab Content Area -->
+  <main class="flex-1 overflow-hidden">
+    <!-- Overview Tab -->
+    <div id="tab-overview" class="tab-content h-full overflow-y-auto p-6">
+      <div class="max-w-7xl mx-auto">
+        <h2 class="text-2xl font-semibold mb-6">System Overview</h2>
+        <div id="overview-content" class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+          <div class="loading-spinner">Loading system overview...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Agents Tab -->
+    <div id="tab-agents" class="tab-content hidden h-full overflow-y-auto p-6">
+      <div class="max-w-7xl mx-auto">
+        <h2 class="text-2xl font-semibold mb-6">Agent Details</h2>
+        <div id="agents-content">
+          <div class="loading-spinner">Loading agent details...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Hierarchy Tab -->
+    <div id="tab-hierarchy" class="tab-content hidden h-full overflow-y-auto p-6">
+      <div class="max-w-7xl mx-auto">
+        <h2 class="text-2xl font-semibold mb-6">Organization Hierarchy</h2>
+        <div id="hierarchy-content" class="bg-gray-800 border border-gray-700 rounded-lg p-4">
+          <div id="hierarchy-chart-container" class="w-full h-96 flex items-center justify-center">
+            <div class="text-gray-500">Hierarchy chart will be rendered here by Graphics Dev</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Projects Tab -->
+    <div id="tab-projects" class="tab-content hidden h-full overflow-y-auto p-6">
+      <div class="max-w-7xl mx-auto">
+        <h2 class="text-2xl font-semibold mb-6">Task Plans & Progress</h2>
+        <div id="projects-content">
+          <div class="loading-spinner">Loading project data...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Archive Tab -->
+    <div id="tab-archive" class="tab-content hidden h-full overflow-y-auto p-6">
+      <div class="max-w-7xl mx-auto">
+        <h2 class="text-2xl font-semibold mb-6">Completed Work Archive</h2>
+        <div id="archive-controls" class="mb-6 bg-gray-800 border border-gray-700 rounded-lg p-4">
+          <div class="flex flex-wrap gap-4">
+            <div class="flex-1 min-w-64">
+              <input type="text" id="archive-search" placeholder="Search completed tasks..." 
+                     class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm">
+            </div>
+            <select id="archive-owner-filter" class="bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm">
+              <option value="">All Agents</option>
+            </select>
+            <select id="archive-plan-filter" class="bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm">
+              <option value="">All Plans</option>
+            </select>
+            <select id="archive-month-filter" class="bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm">
+              <option value="">All Months</option>
+            </select>
+            <button onclick="ArchiveTab.applyFilters()" class="bg-claw-600 hover:bg-claw-700 px-4 py-2 rounded text-sm font-medium transition-colors">
+              Apply Filters
+            </button>
+          </div>
+        </div>
+        <div id="archive-content">
+          <div class="loading-spinner">Loading archive...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Live Feed Tab -->
+    <div id="tab-feed" class="tab-content hidden h-full overflow-y-auto p-6">
+      <div class="max-w-7xl mx-auto">
+        <h2 class="text-2xl font-semibold mb-6">Live Activity Feed</h2>
+        <div id="feed-content" class="bg-gray-800 border border-gray-700 rounded-lg p-4 h-96 overflow-y-auto">
+          <div class="loading-spinner">Loading live feed...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Performance Tab -->
+    <div id="tab-performance" class="tab-content hidden h-full overflow-y-auto p-6">
+      <div id="performance-content" class="max-w-7xl mx-auto">
+        <h2 class="text-2xl font-semibold mb-6">Performance Metrics</h2>
+        <div id="performance-controls" class="mb-6">
+          <select id="performance-range" class="bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm">
+            <option value="7d">Last 7 Days</option>
+            <option value="30d">Last 30 Days</option>
+            <option value="90d">Last 90 Days</option>
+          </select>
+        </div>
+        <div id="performance-charts" class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div id="task-completion-chart" class="bg-gray-800 border border-gray-700 rounded-lg p-4 h-64 flex items-center justify-center">
+            <div class="text-gray-500">Task completion chart (Graphics Dev)</div>
+          </div>
+          <div id="agent-activity-chart" class="bg-gray-800 border border-gray-700 rounded-lg p-4 h-64 flex items-center justify-center">
+            <div class="text-gray-500">Agent activity chart (Graphics Dev)</div>
+          </div>
+          <div id="system-health-chart" class="bg-gray-800 border border-gray-700 rounded-lg p-4 h-64 flex items-center justify-center">
+            <div class="text-gray-500">System health chart (Graphics Dev)</div>
+          </div>
+          <div id="resource-usage-chart" class="bg-gray-800 border border-gray-700 rounded-lg p-4 h-64 flex items-center justify-center">
+            <div class="text-gray-500">Resource usage chart (Graphics Dev)</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Parking Tab -->
+    <div id="tab-parking" class="tab-content hidden h-full overflow-y-auto p-6">
+      <div class="max-w-7xl mx-auto">
+        <h2 class="text-2xl font-semibold mb-6">Parking Lot</h2>
+        <div id="parking-content">
+          <div class="loading-spinner">Loading parking items...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Whiteboard Tab -->
+    <div id="tab-whiteboard" class="tab-content hidden h-full overflow-hidden">
+      <div class="h-full flex flex-col">
+        <div class="px-6 py-4 bg-gray-800 border-b border-gray-700">
+          <h2 class="text-2xl font-semibold">Whiteboard</h2>
+        </div>
+        <div id="whiteboard-container" class="flex-1 flex flex-col overflow-hidden">
+          <div id="whiteboard-toolbar" class="flex items-center gap-2 p-2 bg-gray-800 border-b border-gray-700">
+            <div class="text-gray-500 text-sm">Whiteboard tools (Graphics Dev)</div>
+          </div>
+          <div id="whiteboard-canvas-container" class="flex-1 relative overflow-hidden bg-gray-900 flex items-center justify-center">
+            <div class="text-gray-500">HTML5 Canvas whiteboard (Graphics Dev)</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- HiveDeck Agents Tab -->
+    <div id="tab-hivedeck-agents" class="tab-content hidden h-full overflow-y-auto p-6">
+      <div id="hivedeck-agents-content" class="max-w-7xl mx-auto"></div>
+    </div>
+
+    <!-- Sites Tab -->
+    <div id="tab-sites" class="tab-content hidden h-full overflow-y-auto p-6">
+      <div id="sites-content" class="max-w-7xl mx-auto"></div>
+    </div>
+
+    <!-- Pipeline Tab -->
+    <div id="tab-pipeline" class="tab-content hidden h-full overflow-y-auto p-6">
+      <div id="pipeline-content" class="max-w-7xl mx-auto"></div>
+    </div>
+  </main>
+
+  <!-- Loading & Error Components -->
+  <div id="global-loading" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div class="bg-gray-800 border border-gray-700 rounded-lg p-6 flex items-center gap-3">
+      <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-claw-500"></div>
+      <div class="text-gray-300">Loading...</div>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="js/constants.js?v=1770860864"></script>
+  <script src="js/api-client.js?v=1770860864"></script>
+  <script src="js/state-manager.js?v=1770860864"></script>
+  <script src="js/tab-system.js?v=1770860864"></script>
+  <script src="js/components/overview-tab.js?v=1770860864"></script>
+  <script src="js/components/agents-tab.js?v=1770860864"></script>
+  <script src="js/components/hierarchy-tab.js?v=1770860864"></script>
+  <script src="js/components/projects-tab.js?v=1770860864"></script>
+  <script src="js/components/archive-tab.js?v=1770860864"></script>
+  <script src="js/components/feed-tab.js?v=1770860864"></script>
+  <script src="js/components/performance-tab.js?v=1770860864"></script>
+  <script src="js/components/parking-tab.js?v=1770860864"></script>
+  <script src="js/components/whiteboard-tab.js?v=1770860864"></script>
+  
+  <!-- Graphics Components -->
+  <script src="js/graphics-init.js?v=1770860864"></script>
+  <script src="js/graphics-hierarchy.js?v=1770860864"></script>
+  <script src="js/graphics-whiteboard.js?v=1770860864"></script>
+  <script src="js/graphics-performance.js?v=1770860864"></script>
+  
+  <!-- HiveDeck Components -->
+  <script src="js/components/hivedeck-agents-tab.js?v=1"></script>
+
+  <!-- Sites Components -->
+  <script src="js/components/sites-tab.js?v=1"></script>
+
+  <!-- Pipeline Components -->
+  <script src="js/components/pipeline-tab.js?v=1"></script>
+  
+  <!-- Main App -->
+  <script src="js/app-v3.js?v=1770860864"></script>
+
+</body>
+</html>

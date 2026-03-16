@@ -1,0 +1,11 @@
+{
+  "updated_at": null,
+  "last_slice": null,
+  "modules": {},
+  "conventions": [
+    "CommonJS (require/module.exports)",
+    "Node 22+",
+    "better-sqlite3 for DB operations",
+    "No TypeScript"
+  ]
+}

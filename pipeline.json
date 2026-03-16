@@ -1,0 +1,64 @@
+{
+  "repo_path": ".",
+  "default_branch": "main",
+  "branch_prefix": "slice/",
+  "test_command": "npm test",
+  "scoped_test_command_template": "",
+  "db_path": "pipeline.db",
+  "signal_dir": "signals",
+  "artifacts_dir": "artifacts",
+  "dispatcher": {
+    "type": "signal-file",
+    "timeout_minutes": 60,
+    "poll_interval_seconds": 30
+  },
+  "hooks": {
+    "post_edit": {
+      "enabled": false,
+      "command": ""
+    },
+    "pre_commit": {
+      "enabled": false,
+      "command": ""
+    },
+    "post_test": {
+      "enabled": true,
+      "command": ""
+    },
+    "pre_pr": {
+      "enabled": true,
+      "command": ""
+    },
+    "post_merge": {
+      "enabled": true,
+      "actions": [
+        "update_codemap",
+        "update_backlog"
+      ]
+    },
+    "on_failure": {
+      "enabled": true
+    }
+  },
+  "auto_fix": {
+    "enabled": true,
+    "max_attempts": 1,
+    "agent_type": "codex",
+    "timeout_minutes": 30
+  },
+  "notifications": {
+    "enabled": true,
+    "provider": "console",
+    "blocked_timeout_hours": 2
+  },
+  "codemap": {
+    "path": "codemap.json",
+    "conventions": [
+      "CommonJS (require/module.exports)",
+      "Node 22+",
+      "better-sqlite3 for DB operations",
+      "No TypeScript"
+    ]
+  }
+}
+

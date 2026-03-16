@@ -1,0 +1,57 @@
+{
+  "project": "Pipeline Controller",
+  "version": "1.0",
+  "features": [
+    {
+      "id": "FEAT-001",
+      "name": "Core Registry",
+      "slices": [
+        "SL-001",
+        "SL-002"
+      ],
+      "test_suite": "tests/features/core-registry.test.js"
+    }
+  ],
+  "slices": [
+    {
+      "id": "SL-001",
+      "title": "Bootstrap pipeline package",
+      "description": "Create the package metadata, config loader, and runtime directories.",
+      "acceptance_criteria": [
+        "package.json exists with the required dependencies",
+        "pipeline.json loads successfully",
+        "Runtime directories are created on startup"
+      ],
+      "affected_files": [
+        "package.json",
+        "pipeline.json",
+        "lib/config.js"
+      ],
+      "agent_type": "codex",
+      "agent_instructions": "Keep the implementation CommonJS-only and synchronous where possible.",
+      "dependencies": [],
+      "complexity": "low"
+    },
+    {
+      "id": "SL-002",
+      "title": "Implement registry and CLI",
+      "description": "Add the SQLite registry, event log, and operator commands.",
+      "acceptance_criteria": [
+        "Slice state transitions are validated",
+        "Import loads slices into SQLite",
+        "CLI status and list output match the controller JSON contract"
+      ],
+      "affected_files": [
+        "lib/registry.js",
+        "lib/service.js",
+        "bin/pipeline.js"
+      ],
+      "agent_type": "codex",
+      "agent_instructions": "Use append-only event logging and derived display states.",
+      "dependencies": [
+        "SL-001"
+      ],
+      "complexity": "medium"
+    }
+  ]
+}

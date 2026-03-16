@@ -1,0 +1,7 @@
+node_modules/
+pipeline.db
+signals/
+artifacts/
+mission-control-source/node_modules/
+mission-control-source/server.log
+mission-control-source/whiteboards/temp/

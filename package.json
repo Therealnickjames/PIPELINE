@@ -1,0 +1,22 @@
+{
+  "name": "pipeline-controller",
+  "version": "1.0.0",
+  "description": "Gate-enforced development pipeline controller",
+  "main": "lib/service.js",
+  "bin": {
+    "pipeline": "./bin/pipeline.js"
+  },
+  "scripts": {
+    "test": "node ./bin/pipeline.js status --json"
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.6.2",
+    "chalk": "^4.1.2",
+    "cli-table3": "^0.6.5",
+    "commander": "^12.1.0"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
+}
+
