@@ -2,6 +2,7 @@
 
 const express = require('express');
 const fs = require('fs');
+const crypto = require('crypto');
 const { spawnSync } = require('child_process');
 const constants = require('../../shared/constants.js');
 
@@ -91,6 +92,21 @@ function runPipeline(args) {
   return { ok: true, payload };
 }
 
+function buildRequestId(req) {
+  const incoming = req.headers['x-request-id']
+    || (req.body && req.body.requestId)
+    || (req.query && req.query.requestId);
+  if (incoming) {
+    return String(incoming);
+  }
+
+  if (typeof crypto.randomUUID === 'function') {
+    return `mc-${crypto.randomUUID()}`;
+  }
+
+  return `mc-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
 function sendResult(res, commandResult) {
   if (commandResult.ok) {
     res.json(commandResult.payload);
@@ -130,7 +146,7 @@ router.get('/features', (req, res) => {
 });
 
 router.post('/slices/:id/approve', (req, res) => {
-  const args = ['--json', 'approve', req.params.id];
+  const args = ['--json', 'approve', req.params.id, '--request-id', buildRequestId(req)];
   if (req.body && req.body.notes) {
     args.push('--notes', req.body.notes);
   }
@@ -148,15 +164,23 @@ router.post('/slices/:id/reject', (req, res) => {
     return;
   }
 
-  sendResult(res, runPipeline(['--json', 'reject', req.params.id, '--reason', reason]));
+  sendResult(res, runPipeline([
+    '--json',
+    'reject',
+    req.params.id,
+    '--reason',
+    reason,
+    '--request-id',
+    buildRequestId(req)
+  ]));
 });
 
 router.post('/slices/:id/dispatch', (req, res) => {
-  sendResult(res, runPipeline(['--json', 'dispatch', req.params.id]));
+  sendResult(res, runPipeline(['--json', 'dispatch', req.params.id, '--request-id', buildRequestId(req)]));
 });
 
 router.post('/slices/:id/cancel', (req, res) => {
-  sendResult(res, runPipeline(['--json', 'cancel', req.params.id]));
+  sendResult(res, runPipeline(['--json', 'cancel', req.params.id, '--request-id', buildRequestId(req)]));
 });
 
 module.exports = router;

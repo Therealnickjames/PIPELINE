@@ -9,6 +9,7 @@ class PipelineTab {
     this.slicesData = null;
     this.featuresData = null;
     this.detailData = null;
+    this.pendingActions = new Set();
     TabSystem.registerComponent(this.tabName, this);
   }
 
@@ -68,6 +69,7 @@ class PipelineTab {
     }
 
     this.container.innerHTML = this.buildShell();
+    this.renderRuntimeBanner();
     this.renderStatusBar();
     this.renderFeatureStrip();
     this.renderBoard();
@@ -86,12 +88,49 @@ class PipelineTab {
             ↻ Refresh
           </button>
         </div>
+        <div id="pipeline-runtime-banners"></div>
         <div id="pipeline-status-bar"></div>
         <div id="pipeline-feature-strip"></div>
         <div id="pipeline-board" class="flex gap-4 overflow-x-auto pb-6"></div>
         <div id="pipeline-detail-drawer" class="hidden fixed right-0 top-0 h-full w-96 bg-gray-800 border-l border-gray-700 overflow-y-auto z-50 shadow-2xl"></div>
       </div>
     `;
+  }
+
+  renderRuntimeBanner() {
+    const target = document.getElementById('pipeline-runtime-banners');
+    if (!target) {
+      return;
+    }
+
+    const runtime = (this.statusData && this.statusData.runtime) || {};
+    const banners = [];
+
+    if (runtime.lease && runtime.lease.owner_id) {
+      banners.push(`
+        <div class="bg-blue-900/20 border border-blue-700 rounded-lg px-4 py-3 text-sm text-blue-200">
+          Active runner lease: ${this.escapeHtml(runtime.lease.owner_id)}
+        </div>
+      `);
+    }
+
+    if (Array.isArray(runtime.stale_slices) && runtime.stale_slices.length > 0) {
+      banners.push(`
+        <div class="bg-red-900/20 border border-red-700 rounded-lg px-4 py-3 text-sm text-red-200">
+          Reconciliation needed: ${runtime.stale_slices.length} stale slice${runtime.stale_slices.length === 1 ? '' : 's'}
+        </div>
+      `);
+    }
+
+    if (Array.isArray(runtime.warnings) && runtime.warnings.length > 0) {
+      banners.push(`
+        <div class="bg-yellow-900/20 border border-yellow-700 rounded-lg px-4 py-3 text-sm text-yellow-200">
+          ${runtime.warnings.map((warning) => this.escapeHtml(warning.message || warning.code || String(warning))).join('<br>')}
+        </div>
+      `);
+    }
+
+    target.innerHTML = banners.join('');
   }
 
   renderStatusBar() {
@@ -171,11 +210,12 @@ class PipelineTab {
   }
 
   columnSlices(columnId, slices) {
+    const staleIds = new Set((((this.statusData || {}).runtime || {}).stale_slices || []).map((slice) => slice.id));
     return slices.filter((slice) => {
       if (columnId === 'attention') {
-        return ['NEEDS_SPLIT', 'BLOCKED', 'FAILED_EXECUTION', 'FAILED_TESTS', 'FAILED_PR'].includes(slice.display_status);
+        return staleIds.has(slice.id) || ['NEEDS_SPLIT', 'BLOCKED', 'FAILED_EXECUTION', 'FAILED_TESTS', 'FAILED_PR'].includes(slice.display_status);
       }
-      if (['NEEDS_SPLIT', 'BLOCKED', 'FAILED_EXECUTION', 'FAILED_TESTS', 'FAILED_PR'].includes(slice.display_status)) {
+      if (staleIds.has(slice.id) || ['NEEDS_SPLIT', 'BLOCKED', 'FAILED_EXECUTION', 'FAILED_TESTS', 'FAILED_PR'].includes(slice.display_status)) {
         return false;
       }
       if (columnId === 'pending') {
@@ -207,6 +247,8 @@ class PipelineTab {
         ? 'text-yellow-300 bg-yellow-900/40'
         : 'text-green-300 bg-green-900/40';
     const blocked = slice.blocked_reason ? `<div class="text-xs text-red-300 mt-2">${slice.blocked_reason}</div>` : '';
+    const staleIds = new Set((((this.statusData || {}).runtime || {}).stale_slices || []).map((item) => item.id));
+    const stale = staleIds.has(slice.id) ? '<div class="text-xs text-red-300 mt-2">Stale execution detected</div>' : '';
     const spinner = slice.status === 'EXECUTING' ? '<span class="animate-spin inline-block">◌</span>' : '';
 
     return `
@@ -224,6 +266,7 @@ class PipelineTab {
           <span class="text-blue-400 text-xs">${spinner}</span>
         </div>
         ${blocked}
+        ${stale}
       </button>
     `;
   }
@@ -300,8 +343,17 @@ class PipelineTab {
       return;
     }
 
+    const commandFailures = (slice.recent_commands || []).filter((command) => command.status !== 'COMPLETED').slice(0, 5);
+    const staleBanner = slice.stale_execution
+      ? '<div class="bg-red-900/20 border border-red-700 rounded-lg p-3 text-sm text-red-200">This slice appears stale and may need reconciliation.</div>'
+      : '';
+    const qualityEvidence = slice.quality_gate_evidence
+      ? `<pre class="bg-gray-900 border border-gray-700 rounded p-3 text-xs text-gray-200 overflow-x-auto">${this.escapeHtml(JSON.stringify(slice.quality_gate_evidence, null, 2))}</pre>`
+      : '<div class="text-gray-500 text-sm">No quality-gate artifact recorded yet.</div>';
+
     target.innerHTML = `
       <div class="p-6 space-y-5">
+        ${staleBanner}
         <div class="flex items-start justify-between gap-3">
           <div>
             <div class="text-xs text-gray-500">${slice.id}</div>
@@ -342,8 +394,34 @@ class PipelineTab {
             <div class="text-gray-200">${this.escapeHtml(slice.agent_instructions || 'None provided.')}</div>
           </div>
           <div>
+            <div class="text-gray-400 mb-1">Run Correlation</div>
+            <div class="text-gray-200 text-xs space-y-1">
+              <div>Request: ${this.escapeHtml(slice.last_request_id || 'n/a')}</div>
+              <div>Run: ${this.escapeHtml(slice.last_run_id || 'n/a')}</div>
+            </div>
+          </div>
+          <div>
             <div class="text-gray-400 mb-1">Last Test Result</div>
             <pre class="bg-gray-900 border border-gray-700 rounded p-3 text-xs text-gray-200 overflow-x-auto">${this.escapeHtml(JSON.stringify(slice.test_results || {}, null, 2))}</pre>
+          </div>
+          <div>
+            <div class="text-gray-400 mb-1">Quality Gate Evidence</div>
+            ${qualityEvidence}
+          </div>
+          <div>
+            <div class="text-gray-400 mb-1">Recent Command Failures</div>
+            <div class="space-y-2">
+              ${commandFailures.map((command) => `
+                <div class="bg-gray-900 border border-gray-700 rounded p-3 text-xs">
+                  <div class="flex items-center justify-between gap-2">
+                    <span class="text-white">${this.escapeHtml(command.command_name)}</span>
+                    <span class="text-red-300">${this.escapeHtml(command.status)}</span>
+                  </div>
+                  <div class="text-gray-400 mt-1">run ${this.escapeHtml(command.run_id || 'n/a')} • request ${this.escapeHtml(command.request_id || 'n/a')}</div>
+                  <pre class="text-gray-300 mt-2 overflow-x-auto">${this.escapeHtml(command.stderr_excerpt || command.stdout_excerpt || '')}</pre>
+                </div>
+              `).join('') || '<div class="text-gray-500 text-sm">No failing commands recorded.</div>'}
+            </div>
           </div>
           ${slice.pr_url ? `<div><a href="${slice.pr_url}" target="_blank" class="text-claw-400 hover:text-claw-300">Open PR</a></div>` : ''}
         </div>
@@ -362,6 +440,7 @@ class PipelineTab {
                   <span class="text-gray-500">${event.created_at}</span>
                 </div>
                 <div class="text-gray-400 mt-1">${event.actor}${event.from_state ? `: ${event.from_state} -> ${event.to_state}` : ''}</div>
+                <div class="text-gray-500 mt-1">request ${this.escapeHtml(event.request_id || 'n/a')} • run ${this.escapeHtml(event.run_id || 'n/a')}</div>
               </div>
             `).join('') || '<div class="text-gray-500 text-sm">No events</div>'}
           </div>
@@ -371,32 +450,52 @@ class PipelineTab {
   }
 
   actionButtons(slice) {
+    const busy = this.pendingActions.has(slice.id);
+    const disabled = busy ? 'disabled aria-disabled="true"' : '';
+    const busyClass = busy ? 'opacity-60 cursor-not-allowed' : '';
     if (slice.status === 'SSE_REVIEW') {
       return `
-        <button onclick="window.PipelineTabInstance.approveSlice('${slice.id}')" class="bg-green-700 hover:bg-green-600 px-3 py-2 rounded text-sm transition-colors">Approve</button>
-        <button onclick="window.PipelineTabInstance.rejectSlice('${slice.id}')" class="bg-red-700 hover:bg-red-600 px-3 py-2 rounded text-sm transition-colors">Reject</button>
+        <button ${disabled} onclick="window.PipelineTabInstance.approveSlice('${slice.id}')" class="bg-green-700 hover:bg-green-600 px-3 py-2 rounded text-sm transition-colors ${busyClass}">${busy ? 'Working...' : 'Approve'}</button>
+        <button ${disabled} onclick="window.PipelineTabInstance.rejectSlice('${slice.id}')" class="bg-red-700 hover:bg-red-600 px-3 py-2 rounded text-sm transition-colors ${busyClass}">${busy ? 'Working...' : 'Reject'}</button>
       `;
     }
 
     if (slice.status === 'APPROVED') {
-      return `<button onclick="window.PipelineTabInstance.dispatchSlice('${slice.id}')" class="bg-blue-700 hover:bg-blue-600 px-3 py-2 rounded text-sm transition-colors">Dispatch</button>`;
+      return `<button ${disabled} onclick="window.PipelineTabInstance.dispatchSlice('${slice.id}')" class="bg-blue-700 hover:bg-blue-600 px-3 py-2 rounded text-sm transition-colors ${busyClass}">${busy ? 'Working...' : 'Dispatch'}</button>`;
     }
 
     if (slice.status === 'EXECUTING' || slice.status === 'AUTO_FIX') {
-      return `<button onclick="window.PipelineTabInstance.cancelSlice('${slice.id}')" class="bg-gray-700 hover:bg-gray-600 px-3 py-2 rounded text-sm transition-colors">Cancel</button>`;
+      return `<button ${disabled} onclick="window.PipelineTabInstance.cancelSlice('${slice.id}')" class="bg-gray-700 hover:bg-gray-600 px-3 py-2 rounded text-sm transition-colors ${busyClass}">${busy ? 'Working...' : 'Cancel'}</button>`;
     }
 
     return '';
   }
 
-  async approveSlice(sliceId) {
-    try {
-      await api.approvePipelineSlice(sliceId, '');
-      this.notify(`Approved ${sliceId}`, 'success');
-      await this.refresh();
-    } catch (error) {
-      this.notify(error.message || 'Approve failed', 'error');
+  async withPendingAction(sliceId, action, work) {
+    if (this.pendingActions.has(sliceId)) {
+      return;
     }
+
+    this.pendingActions.add(sliceId);
+    this.renderDetailDrawer();
+    try {
+      await work(api.createRequestId(`pipeline-${action}`));
+    } finally {
+      this.pendingActions.delete(sliceId);
+      this.renderDetailDrawer();
+    }
+  }
+
+  async approveSlice(sliceId) {
+    await this.withPendingAction(sliceId, 'approve', async (requestId) => {
+      try {
+        await api.approvePipelineSlice(sliceId, '', requestId);
+        this.notify(`Approved ${sliceId}`, 'success');
+        await this.refresh();
+      } catch (error) {
+        this.notify(error.message || 'Approve failed', 'error');
+      }
+    });
   }
 
   async rejectSlice(sliceId) {
@@ -405,33 +504,39 @@ class PipelineTab {
       return;
     }
 
-    try {
-      await api.rejectPipelineSlice(sliceId, reason);
-      this.notify(`Rejected ${sliceId}`, 'success');
-      await this.refresh();
-    } catch (error) {
-      this.notify(error.message || 'Reject failed', 'error');
-    }
+    await this.withPendingAction(sliceId, 'reject', async (requestId) => {
+      try {
+        await api.rejectPipelineSlice(sliceId, reason, requestId);
+        this.notify(`Rejected ${sliceId}`, 'success');
+        await this.refresh();
+      } catch (error) {
+        this.notify(error.message || 'Reject failed', 'error');
+      }
+    });
   }
 
   async dispatchSlice(sliceId) {
-    try {
-      await api.dispatchPipelineSlice(sliceId);
-      this.notify(`Dispatched ${sliceId}`, 'success');
-      await this.refresh();
-    } catch (error) {
-      this.notify(error.message || 'Dispatch failed', 'error');
-    }
+    await this.withPendingAction(sliceId, 'dispatch', async (requestId) => {
+      try {
+        await api.dispatchPipelineSlice(sliceId, requestId);
+        this.notify(`Dispatched ${sliceId}`, 'success');
+        await this.refresh();
+      } catch (error) {
+        this.notify(error.message || 'Dispatch failed', 'error');
+      }
+    });
   }
 
   async cancelSlice(sliceId) {
-    try {
-      await api.cancelPipelineSlice(sliceId);
-      this.notify(`Cancelled ${sliceId}`, 'success');
-      await this.refresh();
-    } catch (error) {
-      this.notify(error.message || 'Cancel failed', 'error');
-    }
+    await this.withPendingAction(sliceId, 'cancel', async (requestId) => {
+      try {
+        await api.cancelPipelineSlice(sliceId, requestId);
+        this.notify(`Cancelled ${sliceId}`, 'success');
+        await this.refresh();
+      } catch (error) {
+        this.notify(error.message || 'Cancel failed', 'error');
+      }
+    });
   }
 
   statCard(label, value, colorClass) {

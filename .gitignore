@@ -5,3 +5,7 @@ artifacts/
 mission-control-source/node_modules/
 mission-control-source/server.log
 mission-control-source/whiteboards/temp/
+.c8_output/
+coverage/
+test-results/
+tmp/

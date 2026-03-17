@@ -998,8 +998,12 @@ app.use((err, req, res, next) => {
   });
 });
 
-// Start server
-app.listen(PORT, BIND_ADDRESS, () => {
-  console.log(`Mission Control v3 Backend running on http://${BIND_ADDRESS}:${PORT}`);
-  console.log(`API endpoints available at http://localhost:${PORT}${API_PREFIX}/`);
-});
+// Start server when executed directly
+if (require.main === module) {
+  app.listen(PORT, BIND_ADDRESS, () => {
+    console.log(`Mission Control v3 Backend running on http://${BIND_ADDRESS}:${PORT}`);
+    console.log(`API endpoints available at http://localhost:${PORT}${API_PREFIX}/`);
+  });
+}
+
+module.exports = app;

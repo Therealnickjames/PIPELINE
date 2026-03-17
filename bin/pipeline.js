@@ -5,7 +5,6 @@ const { Command } = require('commander');
 const Table = require('cli-table3');
 const chalk = require('chalk');
 const { PipelineService } = require('../lib/service.js');
-const { PipelineError } = require('../lib/errors.js');
 
 const program = new Command();
 const machineJson = process.argv.slice(2).includes('--json');
@@ -29,6 +28,17 @@ function outputText(text) {
 
 function wantsJson(command) {
   return machineJson || Boolean(command.optsWithGlobals ? command.optsWithGlobals().json : program.opts().json);
+}
+
+function requestOptions(options = {}, actor = 'system') {
+  return {
+    actor,
+    requestId: options.requestId || null
+  };
+}
+
+function addRequestIdOption(command) {
+  return command.option('--request-id <id>', 'Idempotency request identifier');
 }
 
 function renderSliceTable(slices) {
@@ -69,27 +79,23 @@ function emit(command, payload, humanRenderer) {
 program
   .command('config')
   .description('Show the loaded pipeline config')
-  .action(() => {
+  .action((command) => {
     const payload = {
       status: 'ok',
       config: service().configSnapshot()
     };
-    if (program.opts().json) {
-      outputJson(payload);
-      return;
-    }
-
-    outputText(JSON.stringify(payload.config, null, 2));
+    emit(command, payload, (result) => JSON.stringify(result.config, null, 2));
   });
 
-program
-  .command('import <file>')
-  .alias('load')
-  .description('Import slices and feature groups from JSON')
-  .action((file, command) => {
-    const payload = service().importFromFile(file);
-    emit(command, payload, (result) => `Imported ${result.slice_count} slices and ${result.feature_count} features.`);
-  });
+addRequestIdOption(
+  program
+    .command('import <file>')
+    .alias('load')
+    .description('Import slices and feature groups from JSON')
+).action((file, options, command) => {
+  const payload = service().importFromFile(file, requestOptions(options));
+  emit(command, payload, (result) => `Imported ${result.slice_count} slices and ${result.feature_count} features.`);
+});
 
 program
   .command('list')
@@ -132,16 +138,45 @@ program
     const payload = service().getStatus({
       validate: Boolean(options.validate)
     });
-    emit(command, payload, (result) => {
-      if (!options.validate) {
-        return JSON.stringify(result.summary, null, 2);
-      }
+    emit(command, payload, (result) => JSON.stringify(options.validate ? {
+      summary: result.summary,
+      runtime: result.runtime,
+      validation: result.validation
+    } : result.summary, null, 2));
+  });
 
-      return JSON.stringify({
-        summary: result.summary,
-        validation: result.validation
-      }, null, 2);
-    });
+program
+  .command('doctor')
+  .description('Run pre-dispatch environment checks')
+  .action((command) => {
+    const payload = service().doctor();
+    emit(command, payload, (result) => JSON.stringify(result, null, 2));
+  });
+
+addRequestIdOption(
+  program
+    .command('migrate')
+    .description('Apply pending schema migrations')
+).action((options, command) => {
+  const payload = service().migrate(requestOptions(options));
+  emit(command, payload, (result) => JSON.stringify(result, null, 2));
+});
+
+addRequestIdOption(
+  program
+    .command('reconcile')
+    .description('Recover stale runtime state and abandoned work')
+).action((options, command) => {
+  const payload = service().reconcile(requestOptions(options));
+  emit(command, payload, (result) => JSON.stringify(result, null, 2));
+});
+
+program
+  .command('smoke')
+  .description('Run a lightweight readiness check')
+  .action((command) => {
+    const payload = service().smoke();
+    emit(command, payload, (result) => JSON.stringify(result, null, 2));
   });
 
 program
@@ -156,7 +191,7 @@ program
   .command('metrics')
   .description('Show pipeline metrics')
   .option('--feature <featureId>', 'Filter by feature')
-  .option('--agent <agentType>', 'Filter by agent type')
+  .option('--agent <agentType>', 'Filter by agent')
   .action((options, command) => {
     const payload = service().metrics({
       feature: options.feature || null,
@@ -165,83 +200,89 @@ program
     emit(command, payload, (result) => JSON.stringify(result.metrics, null, 2));
   });
 
-program
-  .command('start <id>')
-  .description('Move a slice from PENDING to SSE_REVIEW')
-  .action((id, command) => {
-    const payload = service().startSlice(id);
-    emit(command, payload, (result) => `${chalk.yellow(result.slice.id)} -> ${result.slice.status}`);
-  });
+addRequestIdOption(
+  program
+    .command('start <id>')
+    .description('Move a slice from PENDING to SSE_REVIEW')
+).action((id, options, command) => {
+  const payload = service().startSlice(id, 'sse', requestOptions(options, 'sse'));
+  emit(command, payload, (result) => `${chalk.yellow(result.slice.id)} -> ${result.slice.status}`);
+});
 
-program
-  .command('approve <id>')
-  .description('Approve a slice in SSE_REVIEW')
-  .option('--notes <notes>', 'Approval notes')
-  .action((id, options, command) => {
-    const payload = service().approveSlice(id, options.notes || '');
-    emit(command, payload, (result) => `${chalk.green(result.slice.id)} approved`);
-  });
+addRequestIdOption(
+  program
+    .command('approve <id>')
+    .description('Approve a slice in SSE_REVIEW')
+    .option('--notes <notes>', 'Approval notes')
+).action((id, options, command) => {
+  const payload = service().approveSlice(id, options.notes || '', 'sse', requestOptions(options, 'sse'));
+  emit(command, payload, (result) => `${chalk.green(result.slice.id)} approved`);
+});
 
-program
-  .command('reject <id>')
-  .description('Reject a slice in SSE_REVIEW')
-  .requiredOption('--reason <reason>', 'Reason for rejection')
-  .action((id, options, command) => {
-    const payload = service().rejectSlice(id, options.reason);
-    emit(command, payload, (result) => `${chalk.red(result.slice.id)} returned to PENDING`);
-  });
+addRequestIdOption(
+  program
+    .command('reject <id>')
+    .description('Reject a slice in SSE_REVIEW')
+    .requiredOption('--reason <reason>', 'Reason for rejection')
+).action((id, options, command) => {
+  const payload = service().rejectSlice(id, options.reason, 'sse', requestOptions(options, 'sse'));
+  emit(command, payload, (result) => `${chalk.red(result.slice.id)} returned to PENDING`);
+});
 
-program
-  .command('dispatch <id>')
-  .description('Dispatch an APPROVED slice')
-  .action((id, command) => {
-    const payload = service().dispatchSlice(id);
-    emit(command, payload, (result) => `${chalk.blue(result.slice.id)} executing (${result.dispatch.sessionId})`);
-  });
+addRequestIdOption(
+  program
+    .command('dispatch <id>')
+    .description('Dispatch an APPROVED slice')
+).action((id, options, command) => {
+  const payload = service().dispatchSlice(id, 'sse', requestOptions(options, 'sse'));
+  emit(command, payload, (result) => `${chalk.blue(result.slice.id)} executing (${result.dispatch.sessionId})`);
+});
 
-program
-  .command('cancel <id>')
-  .description('Cancel an active slice')
-  .action((id, command) => {
-    const payload = service().cancelSlice(id);
-    emit(command, payload, (result) => `${result.slice.id} returned to APPROVED`);
-  });
+addRequestIdOption(
+  program
+    .command('cancel <id>')
+    .description('Cancel an active slice')
+).action((id, options, command) => {
+  const payload = service().cancelSlice(id, 'sse', requestOptions(options, 'sse'));
+  emit(command, payload, (result) => `${result.slice.id} returned to APPROVED`);
+});
 
-program
-  .command('process-signals')
-  .description('Process executing slice signals')
-  .option('--slice <id>', 'Process a specific slice')
-  .action((options, command) => {
-    const payload = {
-      status: 'ok',
-      results: service().processSignals(options.slice || null)
-    };
-    emit(command, payload, (result) => JSON.stringify(result.results, null, 2));
-  });
+addRequestIdOption(
+  program
+    .command('process-signals')
+    .description('Process executing slice signals')
+    .option('--slice <id>', 'Process a specific slice')
+).action((options, command) => {
+  const payload = service().processSignals(options.slice || null, 'system', requestOptions(options));
+  emit(command, payload, (result) => JSON.stringify(result.results, null, 2));
+});
 
-program
-  .command('pr <id>')
-  .description('Create a PR for a tested slice')
-  .action((id, command) => {
-    const payload = service().createPr(id);
-    emit(command, payload, (result) => result.pr ? result.pr.url : JSON.stringify(result, null, 2));
-  });
+addRequestIdOption(
+  program
+    .command('pr <id>')
+    .description('Create a PR for a tested slice')
+).action((id, options, command) => {
+  const payload = service().createPr(id, 'system', requestOptions(options));
+  emit(command, payload, (result) => result.pr ? result.pr.url : JSON.stringify(result, null, 2));
+});
 
-program
-  .command('sync <id>')
-  .description('Sync a PR-backed slice')
-  .action((id, command) => {
-    const payload = service().syncSlice(id);
-    emit(command, payload, (result) => JSON.stringify(result, null, 2));
-  });
+addRequestIdOption(
+  program
+    .command('sync <id>')
+    .description('Sync a PR-backed slice')
+).action((id, options, command) => {
+  const payload = service().syncSlice(id, 'system', requestOptions(options));
+  emit(command, payload, (result) => JSON.stringify(result, null, 2));
+});
 
-program
-  .command('run')
-  .description('Run one automated pipeline cycle')
-  .action((command) => {
-    const payload = service().runCycle();
-    emit(command, payload, (result) => `Cycle complete. ${result.changes.length} changes.`);
-  });
+addRequestIdOption(
+  program
+    .command('run')
+    .description('Run one automated pipeline cycle')
+).action((options, command) => {
+  const payload = service().runCycle('system', requestOptions(options));
+  emit(command, payload, (result) => `Cycle complete. ${result.changes.length} changes.`);
+});
 
 function main() {
   try {
@@ -266,7 +307,8 @@ function handleError(error) {
   const payload = {
     status: 'error',
     error: error.message,
-    code: error.code || 'UNKNOWN'
+    code: error.code || 'UNKNOWN',
+    details: error.details || null
   };
 
   if (machineJson || program.opts().json) {

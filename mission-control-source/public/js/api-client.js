@@ -7,6 +7,14 @@ class APIClient {
     this.defaultTimeout = 10000; // 10 seconds
   }
 
+  createRequestId(prefix = 'mc') {
+    if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+      return `${prefix}-${window.crypto.randomUUID()}`;
+    }
+
+    return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  }
+
   // GET request with error handling
   async get(endpoint, params = {}, options = {}) {
     const url = new URL(this.baseURL + endpoint, window.location.origin);
@@ -34,7 +42,18 @@ class APIClient {
       clearTimeout(timeoutId);
 
       if (!response.ok) {
-        throw new APIError(`HTTP ${response.status}: ${response.statusText}`, response.status, endpoint);
+        let errorPayload = null;
+        try {
+          errorPayload = await response.json();
+        } catch (error) {
+          errorPayload = null;
+        }
+        throw new APIError(
+          errorPayload && errorPayload.error ? errorPayload.error : `HTTP ${response.status}: ${response.statusText}`,
+          response.status,
+          endpoint,
+          errorPayload
+        );
       }
 
       const data = await response.json();
@@ -82,7 +101,18 @@ class APIClient {
       clearTimeout(timeoutId);
 
       if (!response.ok) {
-        throw new APIError(`HTTP ${response.status}: ${response.statusText}`, response.status, endpoint);
+        let errorPayload = null;
+        try {
+          errorPayload = await response.json();
+        } catch (error) {
+          errorPayload = null;
+        }
+        throw new APIError(
+          errorPayload && errorPayload.error ? errorPayload.error : `HTTP ${response.status}: ${response.statusText}`,
+          response.status,
+          endpoint,
+          errorPayload
+        );
       }
 
       const responseData = await response.json();
@@ -197,20 +227,20 @@ class APIClient {
     return this.withRetry(() => this.get('/pipeline/features'));
   }
 
-  async approvePipelineSlice(id, notes = '') {
-    return this.withRetry(() => this.post(`/pipeline/slices/${id}/approve`, { notes }));
+  async approvePipelineSlice(id, notes = '', requestId = this.createRequestId('pipeline-approve')) {
+    return this.withRetry(() => this.post(`/pipeline/slices/${id}/approve`, { notes, requestId }));
   }
 
-  async rejectPipelineSlice(id, reason) {
-    return this.withRetry(() => this.post(`/pipeline/slices/${id}/reject`, { reason }));
+  async rejectPipelineSlice(id, reason, requestId = this.createRequestId('pipeline-reject')) {
+    return this.withRetry(() => this.post(`/pipeline/slices/${id}/reject`, { reason, requestId }));
   }
 
-  async dispatchPipelineSlice(id) {
-    return this.withRetry(() => this.post(`/pipeline/slices/${id}/dispatch`, {}));
+  async dispatchPipelineSlice(id, requestId = this.createRequestId('pipeline-dispatch')) {
+    return this.withRetry(() => this.post(`/pipeline/slices/${id}/dispatch`, { requestId }));
   }
 
-  async cancelPipelineSlice(id) {
-    return this.withRetry(() => this.post(`/pipeline/slices/${id}/cancel`, {}));
+  async cancelPipelineSlice(id, requestId = this.createRequestId('pipeline-cancel')) {
+    return this.withRetry(() => this.post(`/pipeline/slices/${id}/cancel`, { requestId }));
   }
 
   async saveWhiteboard(canvasBlob, metadata = {}) {
@@ -246,11 +276,12 @@ class APIClient {
 
 // Custom error class for API errors
 class APIError extends Error {
-  constructor(message, status, endpoint) {
+  constructor(message, status, endpoint, payload = null) {
     super(message);
     this.name = 'APIError';
     this.status = status;
     this.endpoint = endpoint;
+    this.payload = payload;
     this.timestamp = new Date().toISOString();
   }
 
