@@ -13,6 +13,9 @@
     "poll_interval_seconds": 30
   },
   "hooks": {
+    "failure_memory_lookup": {
+      "enabled": true
+    },
     "post_edit": {
       "enabled": false,
       "command": ""
@@ -20,6 +23,12 @@
     "pre_commit": {
       "enabled": false,
       "command": ""
+    },
+    "quality_gate": {
+      "enabled": true,
+      "minimum_coverage": 90,
+      "coverage_command": "npm run coverage",
+      "mutation_command": "npm run mutation"
     },
     "post_test": {
       "enabled": true,
@@ -61,4 +70,3 @@
     ]
   }
 }
-

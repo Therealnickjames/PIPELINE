@@ -127,9 +127,21 @@ program
 program
   .command('status')
   .description('Show pipeline summary')
-  .action((command) => {
-    const payload = service().getStatus();
-    emit(command, payload, (result) => JSON.stringify(result.summary, null, 2));
+  .option('--validate', 'Validate gate configuration and schema')
+  .action((options, command) => {
+    const payload = service().getStatus({
+      validate: Boolean(options.validate)
+    });
+    emit(command, payload, (result) => {
+      if (!options.validate) {
+        return JSON.stringify(result.summary, null, 2);
+      }
+
+      return JSON.stringify({
+        summary: result.summary,
+        validation: result.validation
+      }, null, 2);
+    });
   });
 
 program
