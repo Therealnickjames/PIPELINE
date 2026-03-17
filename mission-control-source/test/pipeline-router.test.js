@@ -5,6 +5,7 @@ const assert = require('node:assert/strict');
 const path = require('path');
 const express = require('express');
 const request = require('supertest');
+const childProcess = require('child_process');
 
 function loadRouter() {
   const routerPath = path.resolve(__dirname, '..', 'src', 'routes', 'pipeline.js');
@@ -30,12 +31,35 @@ test('pipeline router proxies controller status successfully', async () => {
   const repoRoot = path.resolve(__dirname, '..', '..');
   process.env.PIPELINE_ROOT = repoRoot;
   process.env.PIPELINE_CLI = path.resolve(repoRoot, 'bin', 'pipeline.js');
+  const originalSpawnSync = childProcess.spawnSync;
+  childProcess.spawnSync = () => ({
+    status: 0,
+    stdout: JSON.stringify({
+      status: 'ok',
+      summary: {
+        counts: { APPROVED: 1 },
+        display_counts: { APPROVED: 1 },
+        active_slice: null,
+        next_ready_slice: 'slice-001',
+        merged_count: 0,
+        total_slices: 1,
+        attention_count: 0,
+        feature_counts: {}
+      }
+    }),
+    stderr: ''
+  });
 
-  const app = express();
-  app.use('/api/pipeline', loadRouter());
-  const response = await request(app).get('/api/pipeline/status');
+  try {
+    const app = express();
+    app.use('/api/pipeline', loadRouter());
+    const response = await request(app).get('/api/pipeline/status');
 
-  assert.equal(response.status, 200);
-  assert.equal(response.body.status, 'ok');
-  assert.ok(response.body.summary);
+    assert.equal(response.status, 200);
+    assert.equal(response.body.status, 'ok');
+    assert.ok(response.body.summary);
+    assert.equal(response.body.summary.next_ready_slice, 'slice-001');
+  } finally {
+    childProcess.spawnSync = originalSpawnSync;
+  }
 });
