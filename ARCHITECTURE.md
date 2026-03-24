@@ -1,6 +1,8 @@
 # Architecture
 
-This document explains the **static architecture** of the PIPELINE controller. It complements the controller-managed runtime file at `docs/architecture.md`, which may change during active runs.
+This document explains the **static architecture** of PIPELINE: the long-lived system design, not the controller-managed runtime notes.
+
+If you are new to the repo, start with [README.md](README.md) for the product overview and [STATUS.md](STATUS.md) for the current release posture. This file is the deeper technical map.
 
 ## System Context
 

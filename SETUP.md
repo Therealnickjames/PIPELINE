@@ -2,6 +2,8 @@
 
 This guide shows how to wire PIPELINE into a real repository and, optionally, into the bundled Mission Control dashboard.
 
+If you have not read them yet, skim [README.md](README.md) first for the product overview and [STATUS.md](STATUS.md) for the current maturity and expectations. This document is the practical installation path.
+
 ## Prerequisites
 
 - Node.js 22 or newer for the controller
